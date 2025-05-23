@@ -53,13 +53,14 @@ for material in weights:
     d2B = np.gradient(dB, axis=1)
     d2B[:, 0] = d2B[:, 1]
 
-    # 构造 5 通道输入
-    x_data = np.zeros([num_samples, step_len, 5], dtype=np.float32)
+    # 构造 6 通道输入
+    x_data = np.zeros([num_samples, step_len, 6], dtype=np.float32)
     x_data[:, :, 0] = magData.b[:num_samples]
     x_data[:, :, 1] = magData.freq[:num_samples]
     x_data[:, :, 2] = magData.temp[:num_samples]
     x_data[:, :, 3] = dB
     x_data[:, :, 4] = d2B
+    x_data[:, :, 5] = magData.h[:num_samples]
 
     y_data = magData.loss[:num_samples]
 

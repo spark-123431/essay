@@ -50,6 +50,7 @@ def train_model(data_dir, material, base_model_path, device, epochs, valid_batch
 
     try:
         std_b = DataProgress.linear_std(); std_b.load(os.path.join(material_path, "std_b.npy"))
+        std_h = DataProgress.linear_std(); std_h.load(os.path.join(material_path, "std_h.npy"))
         std_freq = DataProgress.linear_std(); std_freq.load(os.path.join(material_path, "std_freq.npy"))
         std_temp = DataProgress.linear_std(); std_temp.load(os.path.join(material_path, "std_temp.npy"))
         std_loss = DataProgress.linear_std(); std_loss.load(os.path.join(material_path, "std_loss.npy"))
@@ -58,6 +59,7 @@ def train_model(data_dir, material, base_model_path, device, epochs, valid_batch
         return
 
     model.std_b = (std_b.k, std_b.b)
+    model.std_h = (std_h.k, std_h.b)
     model.std_freq = (std_freq.k, std_freq.b)
     model.std_temp = (std_temp.k, std_temp.b)
     model.std_loss = (std_loss.k, std_loss.b)

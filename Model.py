@@ -42,6 +42,7 @@ class LSTMSeq2One(nn.Module):
 
         # Default normalization coefficients (mean, std)
         self.std_b = (1.0, 0.0)
+        self.std_h = (1.0, 0.0)
         self.std_freq = (1.0, 0.0)
         self.std_loss = (1.0, 0.0)
         self.std_temp = (1.0, 0.0)
@@ -61,8 +62,8 @@ class LSTMSeq2One(nn.Module):
         in_freq = x[:, 0, 1]  # shape [B]
         in_temp = x[:, 0, 2]  # shape [B]
 
-        # 取出动态 3 通道：[B, T, 3]
-        dynamic = x[:, :, [0, 3, 4]]  # B, dB, d2B
+        # 取出动态 4 通道：[B, T, 4]
+        dynamic = x[:, :, [0, 3, 4, 5]]  # B, dB, d2B, h
 
         # ---- 数据增强 ----
 
@@ -71,7 +72,7 @@ class LSTMSeq2One(nn.Module):
         dynamic = torch.stack([
             dynamic[i].roll(shifts=int(rand_shifts[i].item()), dims=0)
             for i in range(batch_size)
-        ], dim=0)  # shape [B, T, 3]
+        ], dim=0)  # shape [B, T, 4]
 
         # 上下翻转（对所有动态通道取负）
         flip_mask = torch.rand(batch_size, 1, 1, device=x.device) > 0.5
@@ -105,8 +106,8 @@ class LSTMSeq2One(nn.Module):
         in_freq = x[:, 0, 1]  # [batch_size]
         in_temp = x[:, 0, 2]
 
-        # 提取动态通道：B, dB, d2B
-        dynamic = x[:, :, [0, 3, 4]]  # shape [batch_size, seq_len, 3]
+        # 提取动态通道：B, dB, d2B, h
+        dynamic = x[:, :, [0, 3, 4, 5]]  # shape [batch_size, seq_len, 3]
 
         # LSTM 编码（不进行任何数据增强）
         out, _ = self.lstm(dynamic)
@@ -126,6 +127,7 @@ class LSTMSeq2One(nn.Module):
         state = super().state_dict(*args, **kwargs)
         state.update({
             'std_b': self.std_b,
+            'std_h': self.std_h,
             'std_freq': self.std_freq,
             'std_loss': self.std_loss,
             'std_temp': self.std_temp
@@ -134,6 +136,7 @@ class LSTMSeq2One(nn.Module):
 
     def load_state_dict(self, state_dict, strict=True):
         self.std_b = state_dict.pop('std_b', (1.0, 0.0))
+        self.std_h = state_dict.pop('std_h', (1.0, 0.0))
         self.std_freq = state_dict.pop('std_freq', (1.0, 0.0))
         self.std_loss = state_dict.pop('std_loss', (1.0, 0.0))
         self.std_temp = state_dict.pop('std_temp', (1.0, 0.0))
@@ -144,7 +147,7 @@ def get_global_model():
     """
     Factory function for default model configuration.
     """
-    return LSTMSeq2One(hidden_size=30, lstm_num_layers=3, input_size=3, output_size=1)
+    return LSTMSeq2One(hidden_size=30, lstm_num_layers=3, input_size=4, output_size=1)
 
 
 # === Loss Functions ===
@@ -175,6 +178,7 @@ if __name__ == '__main__':
 
     # 构造 ramp 波形
     wave = torch.linspace(0, 1, wave_step).unsqueeze(0).repeat(batch_size, 1)  # shape [64, 128]
+    wave_h = torch.linspace(0, 1, wave_step).unsqueeze(0).repeat(batch_size, 1)
 
     # 一阶导数（差分）
     dB = torch.gradient(wave, dim=1)[0]     # 沿着 dim=1 求导
@@ -189,8 +193,8 @@ if __name__ == '__main__':
     freq = torch.full((batch_size, wave_step), 10.0)      # 频率
     temp = torch.full((batch_size, wave_step), 100.0)     # 温度
 
-    # 构造最终 5 通道张量
-    inputs = torch.stack([wave, freq, temp, dB, d2B], dim=2)  # shape [B, T, 5]
+    # 构造最终 6 通道张量
+    inputs = torch.stack([wave, freq, temp, dB, d2B, wave_h], dim=2)  # shape [B, T, 6]
 
     # 推理
     outputs = model.valid(inputs)  # valid() 无数据增强版本

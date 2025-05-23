@@ -134,30 +134,37 @@ def magplot(material_name, relative_error, save_path="", xlim=50):
 # ===== Data Transform and Split =====
 def dataTransform(raw_data, newStep, savePath, plot=False):
     b_buff = np.zeros([raw_data.b.shape[0], newStep])
+    h_buff = np.zeros([raw_data.b.shape[0], newStep])
     for i in range(raw_data.b.shape[0]):
         x = np.linspace(0, newStep, raw_data.b.shape[1], endpoint=True)
         y = raw_data.b[i]
         b = np.interp(np.arange(0, newStep), x, y)
+        h = np.interp(np.arange(0, newStep), x, y)
         b_buff[i] = b
+        h_buff[i] = h
     raw_data.b = b_buff
+    raw_data.h = h_buff
 
     if plot:
         plt.plot(np.linspace(0, newStep, raw_data.b.shape[1], endpoint=True), raw_data.b[0], 'x')
         plt.show()
 
     std_b = linear_std.get_std_range(raw_data.b.min(), raw_data.b.max(), 0, 1)
+    std_h = linear_std.get_std_range(raw_data.h.min(), raw_data.h.max(), 0, 1)
     std_freq = linear_std.get_std_range(raw_data.freq.min(), raw_data.freq.max(), 0, 1)
     std_temp = linear_std.get_std_range(raw_data.temp.min(), raw_data.temp.max(), 0, 1)
     std_loss = linear_std.get_std_range(raw_data.loss.min(), raw_data.loss.max(), 0, 1)
 
     std_loss.b = 0
     std_b.b = 0
+    std_h.b = 0
 
     raw_data.freq = std_freq.std(raw_data.freq)
     raw_data.b = std_b.std(raw_data.b)
+    raw_data.h = std_b.std(raw_data.h)
     raw_data.temp = std_temp.std(raw_data.temp)
     raw_data.loss = std_loss.std(raw_data.loss)
-    raw_data.h = np.array(0.0)
+    #raw_data.h = np.array(0.0)
 
     raw_data.freq = raw_data.freq.astype(np.float32)
     raw_data.b = raw_data.b.astype(np.float32)
@@ -167,6 +174,7 @@ def dataTransform(raw_data, newStep, savePath, plot=False):
 
     raw_data.save2mat(savePath + r"\data_processed.mat")
     std_b.save(savePath + r"\std_b")
+    std_h.save(savePath + r"\std_h")
     std_freq.save(savePath + r"\std_freq")
     std_temp.save(savePath + r"\std_temp")
     std_loss.save(savePath + r"\std_loss")
@@ -175,11 +183,12 @@ def dataTransform(raw_data, newStep, savePath, plot=False):
 
 def dataSplit(raw_data, savePath, indice=[0.7, 0.2, 0.1]):
     generator = torch.Generator().manual_seed(0)
-    allData = np.zeros([raw_data.b.shape[0], raw_data.b.shape[1]+3])
+    allData = np.zeros([raw_data.b.shape[0], raw_data.b.shape[1]*2+3])
     allData[:, 0:raw_data.b.shape[1]] = raw_data.b
-    allData[:, raw_data.b.shape[1]] = raw_data.temp[:, 0]
-    allData[:, raw_data.b.shape[1]+1] = raw_data.loss[:, 0]
-    allData[:, raw_data.b.shape[1]+2] = raw_data.freq[:, 0]
+    allData[:, raw_data.b.shape[1]:raw_data.b.shape[1]*2] = raw_data.h
+    allData[:, raw_data.b.shape[1]*2] = raw_data.temp[:, 0]
+    allData[:, raw_data.b.shape[1]*2+1] = raw_data.loss[:, 0]
+    allData[:, raw_data.b.shape[1]*2+2] = raw_data.freq[:, 0]
 
     train_set, valid_set, test_set = random_split(dataset=allData, lengths=indice, generator=generator)
     train_set = np.array(train_set, dtype=np.float32)
@@ -190,10 +199,11 @@ def dataSplit(raw_data, savePath, indice=[0.7, 0.2, 0.1]):
     for name, subset in zip(['train', 'valid', 'test'], [train_set, valid_set, test_set]):
         dataset = MagLoader()
         dataset.b = subset[:, 0:stepLen]
-        dataset.temp = subset[:, stepLen:stepLen + 1]
-        dataset.loss = subset[:, stepLen + 1:stepLen + 2]
-        dataset.freq = subset[:, stepLen + 2:stepLen + 3]
-        dataset.h = np.array(0.0)
+        dataset.h = subset[:, stepLen:stepLen*2]
+        dataset.temp = subset[:, stepLen*2:stepLen*2 + 1]
+        dataset.loss = subset[:, stepLen*2 + 1:stepLen*2 + 2]
+        dataset.freq = subset[:, stepLen*2 + 2:stepLen*2 + 3]
+        # dataset.h = np.array(0.0)
         dataset.save2mat(os.path.join(savePath, f"{name}.mat"))
 
 #将.mat 格式的磁损数据集封装成 PyTorch 可以训练使用的 Dataset 和 DataLoader 对象
@@ -208,13 +218,14 @@ class MagDataset(Dataset):
         dB = np.gradient(mag_data.b, axis=1)
         d2B = np.gradient(dB, axis=1)
 
-        # 构造输入张量：B, freq, temp, dB, d2B → 共 5 通道
-        self.x_data = np.zeros((num_samples, seq_len, 5), dtype=np.float32)
+        # 构造输入张量：B, freq, temp, dB, d2B, h → 共 6 通道
+        self.x_data = np.zeros((num_samples, seq_len, 6), dtype=np.float32)
         self.x_data[:, :, 0] = mag_data.b
         self.x_data[:, :, 1] = mag_data.freq  # broadcast
         self.x_data[:, :, 2] = mag_data.temp  # broadcast
         self.x_data[:, :, 3] = dB
         self.x_data[:, :, 4] = d2B
+        self.x_data[:, :, 5] = mag_data.h
 
         self.y_data = torch.tensor(mag_data.loss, dtype=torch.float32)
         self.x_data = torch.tensor(self.x_data, dtype=torch.float32)
@@ -242,7 +253,7 @@ if __name__ == '__main__':
         raw_path = os.path.join(raw_data_path, material)
         save_path = os.path.join(processed_data_dir, material)
 
-        if not os.path.isdir(raw_path) or os.path.exists(os.path.join(save_path, 'train.mat')):
+        if not os.path.isdir(raw_path):# or os.path.exists(os.path.join(save_path, 'train.mat')):
             continue
 
         os.makedirs(save_path, exist_ok=True)
