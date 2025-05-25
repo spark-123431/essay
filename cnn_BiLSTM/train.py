@@ -3,7 +3,7 @@ import torch
 import scipy.io as sio
 import matplotlib.pyplot as plt
 from torch.utils.data import DataLoader, TensorDataset
-from CNN_BiLSTM_model import CNNBiLSTM
+from CNN_BiLSTM_model import CNNBiLSTM, RelativeLoss
 import numpy as np
 
 def load_dataset(mat_path):

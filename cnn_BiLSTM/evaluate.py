@@ -26,7 +26,7 @@ def evaluate_model(model, dataloader, device):
             targets.append(y.cpu().numpy())
     pred_all = np.concatenate(preds)
     true_all = np.concatenate(targets)
-    return (pred_all - true_all) / (true_all + 1e-12)
+    return abs(pred_all - true_all) / (true_all + 1e-12)
 
 def magplot(material_name, relative_error, save_path="", xlim=50):
     relv_err = np.abs(relative_error) * 100
@@ -37,8 +37,8 @@ def magplot(material_name, relative_error, save_path="", xlim=50):
     subtitle = f"Avg={avg:.2f}%, 95-Prct={p95:.2f}%, 99-Prct={p99:.2f}%, Max={max_err:.2f}%"
     plt.figure(figsize=(6, 3), dpi=300)
     plt.rcParams["font.family"] = "Times New Roman"
-    plt.title(f"Error Distribution for {material_name}", fontsize=18)
-    plt.suptitle(subtitle, fontsize=10)
+    plt.suptitle(f"Error Distribution for {material_name}", fontsize=18, y=1.05)
+    plt.title(f"Avg={avg:.2f}%, 95-Prct={p95:.2f}%, 99-Prct={p99:.2f}%, Max={max_err:.2f}%", fontsize=10)
     plt.hist(relv_err, bins=20, edgecolor='black', density=True, linewidth=0.5)
     def get_density(x, data):
         hist, edges = np.histogram(data, bins=20, density=True)
@@ -63,26 +63,27 @@ def magplot(material_name, relative_error, save_path="", xlim=50):
         plt.show()
     plt.close()
 
-# 主程序
-data_dir = r'E:\project\cnn_BiLSTM'
-weights_dir = os.path.join(data_dir, 'Trained Weights')
-processed_data_dir = os.path.join(data_dir, 'Processed Training Data')
-results_dir = os.path.join(data_dir, 'Validation')
-os.makedirs(results_dir, exist_ok=True)
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+if __name__ == "__main__":
+    # 主程序
+    data_dir = r'E:\project\cnn_BiLSTM'
+    weights_dir = os.path.join(data_dir, 'Trained Weights')
+    processed_data_dir = os.path.join(data_dir, 'Processed Training Data')
+    results_dir = os.path.join(data_dir, 'Validation')
+    os.makedirs(results_dir, exist_ok=True)
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-for fname in os.listdir(weights_dir):
-    if not fname.endswith('.ckpt'):
-        continue
-    material = fname.replace(".ckpt", "")
-    model_path = os.path.join(weights_dir, fname)
-    test_path = os.path.join(processed_data_dir, material, "test.mat")
-    if not os.path.exists(test_path):
-        continue
-    model = CNNBiLSTM().to(device)
-    model.load_state_dict(torch.load(model_path, map_location=device))
-    test_set = load_test_dataset(test_path)
-    test_loader = DataLoader(test_set, batch_size=4096)
-    rel_err = evaluate_model(model, test_loader, device)
-    save_path = os.path.join(results_dir, f"{material}_err.png")
-    magplot(material, rel_err, save_path)
+    for fname in os.listdir(weights_dir):
+        if not fname.endswith('.ckpt'):
+            continue
+        material = fname.replace(".ckpt", "")
+        model_path = os.path.join(weights_dir, fname)
+        test_path = os.path.join(processed_data_dir, material, "test.mat")
+        if not os.path.exists(test_path):
+            continue
+        model = CNNBiLSTM().to(device)
+        model.load_state_dict(torch.load(model_path, map_location=device))
+        test_set = load_test_dataset(test_path)
+        test_loader = DataLoader(test_set, batch_size=4096)
+        rel_err = evaluate_model(model, test_loader, device)
+        save_path = os.path.join(results_dir, f"{material}_err.png")
+        magplot(material, rel_err, save_path)

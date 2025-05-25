@@ -92,3 +92,15 @@ def train_model(model, train_loader, val_loader, epochs=200, lr=0.01):
             print(f"Epoch {epoch+1}, Val MSE: {np.mean(val_losses):.4f}")
 
 
+class RelativeLoss(nn.Module):
+    def __init__(self, epsilon=1e-6):
+        super().__init__()
+        self.epsilon = epsilon  # 防止除 0
+
+    def forward(self, pred, target):
+        """
+        pred: [batch_size], 标准化预测值
+        target: [batch_size], 标准化真实值
+        """
+        relative_error = torch.abs(pred - target) / (torch.abs(target) + self.epsilon)
+        return torch.mean(relative_error)
