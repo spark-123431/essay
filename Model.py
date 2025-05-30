@@ -24,7 +24,7 @@ class LSTMSeq2One(nn.Module):
 
         # Fully connected regression head
         self.regression_head = nn.Sequential(
-            nn.Linear(hidden_size + 2, 128),
+            nn.Linear(hidden_size + 3, 128),
             nn.ELU(),
             nn.Linear(128, 196),
             nn.ELU(),
@@ -42,7 +42,7 @@ class LSTMSeq2One(nn.Module):
 
         # Default normalization coefficients (mean, std)
         self.std_b = (1.0, 0.0)
-        self.std_h = (1.0, 0.0)
+        self.std_bm = (1.0, 0.0)
         self.std_freq = (1.0, 0.0)
         self.std_loss = (1.0, 0.0)
         self.std_temp = (1.0, 0.0)
@@ -55,41 +55,41 @@ class LSTMSeq2One(nn.Module):
         - x[:,:,2]: temp (scalar)
         - x[:,:,3]: dB
         - x[:,:,4]: d2B
+        - x[:,:,5]: h
         """
-        batch_size, seq_len, _ = x.shape
 
         # 取出静态特征
-        in_freq = x[:, 0, 1]  # shape [B]
-        in_temp = x[:, 0, 2]  # shape [B]
+        in_b = x[:, :, 0:1]  # B waveform
+        in_freq = x[:, 0, 1]  # scalar: frequency
+        in_temp = x[:, 0, 2]  # scalar: temperature
+        in_bm = x[:, 0, 3]  # scalar: Bm
 
-        # 取出动态 4 通道：[B, T, 4]
-        dynamic = x[:, :, [0, 3, 4, 5]]  # B, dB, d2B, h
+        # --- Data Augmentation ---
+        batch_size, seq_len, _ = in_b.shape
 
-        # ---- 数据增强 ----
-
-        # 时间平移（对所有通道同步）
-        rand_shifts = torch.randint(seq_len, (batch_size,), device=x.device)
-        dynamic = torch.stack([
-            dynamic[i].roll(shifts=int(rand_shifts[i].item()), dims=0)
+        # Random waveform shift
+        rand_shifts = torch.randint(seq_len, (batch_size, 1, 1), device=x.device)
+        in_b = torch.cat([
+            in_b[i].roll(shifts=int(rand_shifts[i]), dims=0).unsqueeze(0)
             for i in range(batch_size)
-        ], dim=0)  # shape [B, T, 4]
+        ], dim=0)
 
-        # 上下翻转（对所有动态通道取负）
-        flip_mask = torch.rand(batch_size, 1, 1, device=x.device) > 0.5
-        dynamic = torch.where(flip_mask, -dynamic, dynamic)
+        # # 上下翻转（对所有动态通道取负）
+        # flip_mask = torch.rand(batch_size, 1, 1, device=x.device) > 0.5
+        # dynamic = torch.where(flip_mask, -dynamic, dynamic)
 
-        # ---- LSTM ----
-        out, _ = self.lstm(dynamic)  # input: [B, T, 3]
-        last_hidden = out[:, -1, :]  # [B, hidden_size]
+        # --- LSTM Encoding ---
+        out, _ = self.lstm(in_b)
+        last_hidden = out[:, -1, :]  # last timestep output
 
-        # ---- 拼接静态信息 ----
+        # --- Concatenate scalar features ---
         out_combined = torch.cat([
             last_hidden,
+            in_bm.unsqueeze(1),
             in_freq.unsqueeze(1),
-            in_temp.unsqueeze(1)
-        ], dim=1)
+            in_temp.unsqueeze(1)], dim=1)
 
-        # ---- FC 层回归 ----
+        # --- Fully connected regression ---
         output = self.regression_head(out_combined)
 
         return output
@@ -100,34 +100,31 @@ class LSTMSeq2One(nn.Module):
         x.shape == [batch_size, seq_len, 5]
         Channels: [B, freq, temp, dB, d2B]
         """
-        batch_size, seq_len, _ = x.shape
+        in_b = x[:, :, 0:1]
+        in_bm = x[:, 0, 1]
+        in_freq = x[:, 0, 2]
+        in_temp = x[:, 0, 3]
 
-        # 提取静态通道（常量，取第一个时间步即可）
-        in_freq = x[:, 0, 1]  # [batch_size]
-        in_temp = x[:, 0, 2]
+        # --- LSTM 编码 ---
+        out, _ = self.lstm(in_b)
+        last_hidden = out[:, -1, :]
 
-        # 提取动态通道：B, dB, d2B, h
-        dynamic = x[:, :, [0, 3, 4, 5]]  # shape [batch_size, seq_len, 3]
-
-        # LSTM 编码（不进行任何数据增强）
-        out, _ = self.lstm(dynamic)
-        last_hidden = out[:, -1, :]  # shape [batch_size, hidden_size]
-
-        # 拼接静态特征
+        # --- 拼接静态特征 ---
         out_combined = torch.cat([
             last_hidden,
-            in_freq.unsqueeze(1),  # [batch_size, 1]
+            in_bm.unsqueeze(1),
+            in_freq.unsqueeze(1),
             in_temp.unsqueeze(1)
-        ], dim=1)  # [batch_size, hidden_size + 2]
+        ], dim=1)
 
-        # 全连接层预测
         return self.regression_head(out_combined)
+
 
     def state_dict(self, *args, **kwargs):
         state = super().state_dict(*args, **kwargs)
         state.update({
             'std_b': self.std_b,
-            'std_h': self.std_h,
+            'std_bm': self.std_bm,
             'std_freq': self.std_freq,
             'std_loss': self.std_loss,
             'std_temp': self.std_temp
@@ -136,7 +133,7 @@ class LSTMSeq2One(nn.Module):
 
     def load_state_dict(self, state_dict, strict=True):
         self.std_b = state_dict.pop('std_b', (1.0, 0.0))
-        self.std_h = state_dict.pop('std_h', (1.0, 0.0))
+        self.std_bm = state_dict.pop('std_bm', (1.0, 0.0))
         self.std_freq = state_dict.pop('std_freq', (1.0, 0.0))
         self.std_loss = state_dict.pop('std_loss', (1.0, 0.0))
         self.std_temp = state_dict.pop('std_temp', (1.0, 0.0))
@@ -147,7 +144,7 @@ def get_global_model():
     """
     Factory function for default model configuration.
     """
-    return LSTMSeq2One(hidden_size=30, lstm_num_layers=3, input_size=4, output_size=1)
+    return LSTMSeq2One(hidden_size=30, lstm_num_layers=3, input_size=1, output_size=1)
 
 
 # === Loss Functions ===
@@ -176,28 +173,24 @@ if __name__ == '__main__':
     wave_step = 128
     batch_size = 64
 
-    # 构造 ramp 波形
-    wave = torch.linspace(0, 1, wave_step).unsqueeze(0).repeat(batch_size, 1)  # shape [64, 128]
-    wave_h = torch.linspace(0, 1, wave_step).unsqueeze(0).repeat(batch_size, 1)
+    # 构造简单 ramp 波形 B
+    wave = torch.linspace(0, 1, wave_step).unsqueeze(0).repeat(batch_size, 1)  # [B, T]
 
-    # 一阶导数（差分）
-    dB = torch.gradient(wave, dim=1)[0]     # 沿着 dim=1 求导
-    dB[:, 0] = dB[:, 1]  # 边界处理
-    dB = dB
+    # 构造静态特征：Bm, freq, temp（每条样本一个值）
+    bm = wave.abs().max(dim=1, keepdim=True)[0]  # [B, 1]
+    freq = torch.full((batch_size, 1), 10.0)  # [B, 1]
+    temp = torch.full((batch_size, 1), 100.0)  # [B, 1]
 
-    # 二阶导数（再次差分）
-    d2B = torch.gradient(dB, dim=1)[0]
-    d2B[:, 0] = d2B[:, 1]
+    # 广播这些静态特征到 [B, T] 再堆叠为 4 通道
+    bm_seq = bm.repeat(1, wave_step)  # [B, T]
+    freq_seq = freq.repeat(1, wave_step)
+    temp_seq = temp.repeat(1, wave_step)
 
-    # 拼接 freq 和 temp，都是常量，广播生成
-    freq = torch.full((batch_size, wave_step), 10.0)      # 频率
-    temp = torch.full((batch_size, wave_step), 100.0)     # 温度
+    # 构造最终输入：B, Bm, freq, temp
+    inputs = torch.stack([wave, bm_seq, freq_seq, temp_seq], dim=2)  # [B, T, 4]
 
-    # 构造最终 6 通道张量
-    inputs = torch.stack([wave, freq, temp, dB, d2B, wave_h], dim=2)  # shape [B, T, 6]
-
-    # 推理
-    outputs = model.valid(inputs)  # valid() 无数据增强版本
+    # 模型推理（不含数据增强）
+    outputs = model.valid(inputs)
     print("Output shape:", outputs.shape)
     print("First output sample:", outputs[0].item())
 

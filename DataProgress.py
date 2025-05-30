@@ -49,6 +49,7 @@ class MagLoader:
             if data_source == 'mat':
                 data = sio.loadmat(material_path)
                 self.b = np.array(data['b'])
+                self.bm = np.array(data['bm'])
                 self.h = np.array(data['h'])
                 self.temp = np.array(data['temp'])
                 self.loss = np.array(data['loss'])
@@ -63,18 +64,29 @@ class MagLoader:
                 self.freq = np.loadtxt(os.path.join(material_path, 'Frequency[Hz].csv'), delimiter=',').astype(np.float32)
                 self.loss = np.loadtxt(os.path.join(material_path, 'Volumetric_losses[Wm-3].csv'), delimiter=',').astype(np.float32)
 
+            # 计算每条 B 波形的最大幅值（Bm）
+            self.bm = np.max(np.abs(self.b), axis=1)
+
             if data_type == 'torch':
                 self.b = torch.from_numpy(self.b)
                 self.h = torch.from_numpy(self.h)
                 self.temp = torch.from_numpy(self.temp)
                 self.loss = torch.from_numpy(self.loss)
                 self.freq = torch.from_numpy(self.freq)
+                self.bm = torch.from_numpy(self.bm)
         else:
-            self.b = self.h = self.temp = self.loss = self.freq = np.array([])
+            self.b = self.bm = self.h = self.temp = self.loss = self.freq = np.array([])
         return
 
     def save2mat(self, save_path):
-        sio.savemat(save_path, {'b': self.b, 'h': self.h, 'temp': self.temp, 'loss': self.loss, 'freq': self.freq})
+        sio.savemat(save_path, {
+            'b': self.b,
+            'h': self.h,
+            'temp': self.temp,
+            'loss': self.loss,
+            'freq': self.freq,
+            'bm': self.bm
+        })
 
 
 def magplot(material_name, relative_error, save_path="", xlim=50):
@@ -161,10 +173,18 @@ def dataTransform(raw_data, newStep, savePath, plot=False):
 
     raw_data.freq = std_freq.std(raw_data.freq)
     raw_data.b = std_b.std(raw_data.b)
-    raw_data.h = std_b.std(raw_data.h)
+    #raw_data.h = std_b.std(raw_data.h)
     raw_data.temp = std_temp.std(raw_data.temp)
     raw_data.loss = std_loss.std(raw_data.loss)
-    #raw_data.h = np.array(0.0)
+    raw_data.h = np.array(0.0)
+
+    # 添加 Bm 插值计算（每条波形 max(abs(b))）
+    raw_data.bm = np.max(np.abs(b_buff), axis=1)[:, np.newaxis]  # 保留列向量形状以便广播
+
+    std_bm = linear_std.get_std_range(raw_data.bm.min(), raw_data.bm.max(), 0, 1)
+    raw_data.bm = std_bm.std(raw_data.bm)
+    raw_data.bm = raw_data.bm.astype(np.float32)
+
 
     raw_data.freq = raw_data.freq.astype(np.float32)
     raw_data.b = raw_data.b.astype(np.float32)
@@ -178,6 +198,8 @@ def dataTransform(raw_data, newStep, savePath, plot=False):
     std_freq.save(savePath + r"\std_freq")
     std_temp.save(savePath + r"\std_temp")
     std_loss.save(savePath + r"\std_loss")
+    std_bm.save(savePath + r"\std_bm")
+
 
     return raw_data
 
@@ -196,12 +218,12 @@ def dataTransform(raw_data, newStep, savePath, plot=False):
 
 def dataSplit(raw_data, savePath, indice=[0.7, 0.2, 0.1]):
     generator = torch.Generator().manual_seed(0)
-    allData = np.zeros([raw_data.b.shape[0], raw_data.b.shape[1]*2+3])
+    allData = np.zeros([raw_data.b.shape[0], raw_data.b.shape[1] * 2 + 4])
     allData[:, 0:raw_data.b.shape[1]] = raw_data.b
-    allData[:, raw_data.b.shape[1]:raw_data.b.shape[1]*2] = raw_data.h
-    allData[:, raw_data.b.shape[1]*2] = raw_data.temp[:, 0]
-    allData[:, raw_data.b.shape[1]*2+1] = raw_data.loss[:, 0]
-    allData[:, raw_data.b.shape[1]*2+2] = raw_data.freq[:, 0]
+    allData[:, raw_data.b.shape[1]] = raw_data.temp[:, 0]
+    allData[:, raw_data.b.shape[1] + 1] = raw_data.loss[:, 0]
+    allData[:, raw_data.b.shape[1] + 2] = raw_data.freq[:, 0]
+    allData[:, raw_data.b.shape[1] + 3] = raw_data.bm[:, 0]
 
     train_set, valid_set, test_set = random_split(dataset=allData, lengths=indice, generator=generator)
     train_set = np.array(train_set, dtype=np.float32)
@@ -212,11 +234,12 @@ def dataSplit(raw_data, savePath, indice=[0.7, 0.2, 0.1]):
     for name, subset in zip(['train', 'valid', 'test'], [train_set, valid_set, test_set]):
         dataset = MagLoader()
         dataset.b = subset[:, 0:stepLen]
-        dataset.h = subset[:, stepLen:stepLen*2]
-        dataset.temp = subset[:, stepLen*2:stepLen*2 + 1]
-        dataset.loss = subset[:, stepLen*2 + 1:stepLen*2 + 2]
-        dataset.freq = subset[:, stepLen*2 + 2:stepLen*2 + 3]
-        # dataset.h = np.array(0.0)
+        #dataset.h = subset[:, stepLen:stepLen*2]
+        dataset.temp = subset[:, stepLen:stepLen + 1]
+        dataset.loss = subset[:, stepLen + 1:stepLen + 2]
+        dataset.freq = subset[:, stepLen + 2:stepLen + 3]
+        dataset.bm = subset[:, stepLen + 3:stepLen + 4]
+        dataset.h = np.array(0.0)
         dataset.save2mat(os.path.join(savePath, f"{name}.mat"))
 
 #将.mat 格式的磁损数据集封装成 PyTorch 可以训练使用的 Dataset 和 DataLoader 对象
@@ -227,18 +250,21 @@ class MagDataset(Dataset):
         num_samples = mag_data.b.shape[0]
         seq_len = mag_data.b.shape[1]
 
-        # 计算 B 的一阶导数和二阶导数（中心差分）
-        dB = np.gradient(mag_data.b, axis=1)
-        d2B = np.gradient(dB, axis=1)
+        # # 计算 B 的一阶导数和二阶导数（中心差分）
+        # dB = np.gradient(mag_data.b, axis=1)
+        # d2B = np.gradient(dB, axis=1)
 
         # 构造输入张量：B, freq, temp, dB, d2B, h → 共 6 通道
-        self.x_data = np.zeros((num_samples, seq_len, 6), dtype=np.float32)
+        self.x_data = np.zeros((num_samples, seq_len, 4), dtype=np.float32)
         self.x_data[:, :, 0] = mag_data.b
         self.x_data[:, :, 1] = mag_data.freq  # broadcast
         self.x_data[:, :, 2] = mag_data.temp  # broadcast
-        self.x_data[:, :, 3] = dB
-        self.x_data[:, :, 4] = d2B
-        self.x_data[:, :, 5] = mag_data.h
+        self.x_data[:, :, 3] = np.repeat(mag_data.bm[:, np.newaxis], seq_len, axis=1)
+
+
+        # self.x_data[:, :, 3] = dB
+        # self.x_data[:, :, 4] = d2B
+        # self.x_data[:, :, 5] = mag_data.h
 
         self.y_data = torch.tensor(mag_data.loss, dtype=torch.float32)
         self.x_data = torch.tensor(self.x_data, dtype=torch.float32)
@@ -275,6 +301,7 @@ if __name__ == '__main__':
         data.temp = data.temp[:, np.newaxis] if data.temp.ndim == 1 else data.temp
         data.freq = data.freq[:, np.newaxis] if data.freq.ndim == 1 else data.freq
         data.loss = data.loss[:, np.newaxis] if data.loss.ndim == 1 else data.loss
+        data.bm = data.bm[:, np.newaxis] if data.bm.ndim == 1 else data.bm
 
         data = dataTransform(data, newStep, save_path)
         dataSplit(data, save_path)

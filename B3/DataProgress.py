@@ -87,14 +87,13 @@ def magplot(material_name, relative_error, save_path="", xlim=50):
     p99 = np.percentile(relv_err, 99)
     max_err = np.max(relv_err)
 
-    # 准备标题
-    subtitle = f"Avg={avg:.2f}%, 95-Prct={p95:.2f}%, 99-Prct={p99:.2f}%, Max={max_err:.2f}%"
-
     # 创建图形
     plt.figure(figsize=(6, 3), dpi=300)
     plt.rcParams["font.family"] = "Times New Roman"
-    plt.title(f"Error Distribution for {material_name}", fontsize=18)
-    plt.suptitle(subtitle, fontsize=10)
+
+    # 设置主标题和副标题
+    plt.suptitle(f"Error Distribution for {material_name}", fontsize=18, y=1.05)
+    plt.title(f"Avg={avg:.2f}%, 95-Prct={p95:.2f}%, 99-Prct={p99:.2f}%, Max={max_err:.2f}%", fontsize=10)
 
     # 绘制误差直方图
     plt.hist(relv_err, bins=20, edgecolor='black', density=True, linewidth=0.5)

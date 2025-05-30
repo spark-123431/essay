@@ -41,26 +41,21 @@ for material in weights:
     model = Model.get_global_model().to(device)
     model.load_state_dict(torch.load(os.path.join(weights_dir, f'{material}.ckpt'), map_location=device)) # Load trained material model from .ckpt file
 
-    num_samples = min(magData.b.shape[0], max_samples)  # Limits number of samples from validation dataset being used
-
+    num_samples = min(magData.b.shape[0], max_samples)
     step_len = magData.b.shape[1]
 
-    # 一阶导
-    dB = np.gradient(magData.b[:num_samples], axis=1)
-    dB[:, 0] = dB[:, 1]  # 边界处理
+    b = magData.b[:num_samples]  # [N, T]
+    bm = np.max(np.abs(b), axis=1, keepdims=True)  # [N, 1]
+    freq = magData.freq[:num_samples]  # [N, 1]
+    temp = magData.temp[:num_samples]  # [N, 1]
+    y_data = magData.loss[:num_samples]  # [N, 1]
 
-    # 二阶导
-    d2B = np.gradient(dB, axis=1)
-    d2B[:, 0] = d2B[:, 1]
-
-    # 构造 6 通道输入
-    x_data = np.zeros([num_samples, step_len, 6], dtype=np.float32)
-    x_data[:, :, 0] = magData.b[:num_samples]
-    x_data[:, :, 1] = magData.freq[:num_samples]
-    x_data[:, :, 2] = magData.temp[:num_samples]
-    x_data[:, :, 3] = dB
-    x_data[:, :, 4] = d2B
-    x_data[:, :, 5] = magData.h[:num_samples]
+    # 构造最终输入张量：B, bm, freq, temp 共 4 通道
+    x_data = np.zeros((num_samples, step_len, 4), dtype=np.float32)
+    x_data[:, :, 0] = b  # B
+    x_data[:, :, 1] = bm  # broadcast
+    x_data[:, :, 2] = freq  # broadcast
+    x_data[:, :, 3] = temp  # broadcast
 
     y_data = magData.loss[:num_samples]
 

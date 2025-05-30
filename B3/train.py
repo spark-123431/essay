@@ -129,7 +129,7 @@ if __name__ == "__main__":
     # 通用配置
     data_dir = "E:/project/B3"
     weight_dir = os.path.join(data_dir, 'Trained Weights')
-    base_material = "allmaterials"
+    base_material = ("3C94")
     base_model_path = os.path.join(weight_dir, f"{base_material}.ckpt")
     epochs = 700
     valid_batch_size = 5000
@@ -150,7 +150,7 @@ if __name__ == "__main__":
     # === 第二步：遍历其余材料，基于 base model 微调训练 ===
     for material in all_materials:
         if material == base_material:
-            continue  # 已处理，无需再训练
+            continue  # 已处理，无需再训练y
 
         print(f"\n[{material}] Training based on base model: {base_material}")
         train_model(data_dir, material, base_model_path, device, epochs, valid_batch_size, verbose=False)
