@@ -67,16 +67,16 @@ class LSTMSeq2One(nn.Module):
             for i in range(batch_size)
         ], dim=0)
 
-        # # Random vertical flip
-        # vertical_flip_mask = torch.rand(batch_size, 1, 1, device=x.device) > 0.5
-        # in_b = torch.where(vertical_flip_mask, -in_b, in_b)
-        #
-        # # Random horizontal flip (i.e., reverse waveform)
-        # horizontal_flip_mask = torch.rand(batch_size, device=x.device) > 0.5
-        # if horizontal_flip_mask.any():
-        #     # 找出需要翻转的样本索引
-        #     flip_indices = horizontal_flip_mask.nonzero(as_tuple=True)[0]
-        #     in_b[flip_indices] = torch.flip(in_b[flip_indices], dims=[1])
+        # Random vertical flip
+        vertical_flip_mask = torch.rand(batch_size, 1, 1, device=x.device) > 0.5
+        in_b = torch.where(vertical_flip_mask, -in_b, in_b)
+
+        # Random horizontal flip (i.e., reverse waveform)
+        horizontal_flip_mask = torch.rand(batch_size, device=x.device) > 0.5
+        if horizontal_flip_mask.any():
+            # 找出需要翻转的样本索引
+            flip_indices = horizontal_flip_mask.nonzero(as_tuple=True)[0]
+            in_b[flip_indices] = torch.flip(in_b[flip_indices], dims=[1])
 
         # --- LSTM Encoding ---
         out, _ = self.lstm(in_b)

@@ -4,7 +4,6 @@ import time
 import matplotlib.pyplot as plt
 import scipy.io as sio
 import torch.optim as optim
-from nbconvert.utils.io import unicode_stdin_stream
 
 from Model import get_global_model, RelativeLoss
 import DataProgress
@@ -51,6 +50,7 @@ def train_model(data_dir, material, base_model_path, device, epochs, valid_batch
 
     try:
         std_b = DataProgress.linear_std(); std_b.load(os.path.join(material_path, "std_b.npy"))
+        std_h = DataProgress.linear_std(); std_h.load(os.path.join(material_path, "std_h.npy"))
         std_freq = DataProgress.linear_std(); std_freq.load(os.path.join(material_path, "std_freq.npy"))
         std_temp = DataProgress.linear_std(); std_temp.load(os.path.join(material_path, "std_temp.npy"))
         std_loss = DataProgress.linear_std(); std_loss.load(os.path.join(material_path, "std_loss.npy"))
@@ -59,6 +59,7 @@ def train_model(data_dir, material, base_model_path, device, epochs, valid_batch
         return
 
     model.std_b = (std_b.k, std_b.b)
+    model.std_h = (std_h.k, std_h.b)
     model.std_freq = (std_freq.k, std_freq.b)
     model.std_temp = (std_temp.k, std_temp.b)
     model.std_loss = (std_loss.k, std_loss.b)
@@ -67,8 +68,8 @@ def train_model(data_dir, material, base_model_path, device, epochs, valid_batch
     optimizer = optim.AdamW(model.parameters(), lr=1e-4)
     scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=200, eta_min=0)
 
-    train_loader = DataProgress.get_dataloader(train_file, batch_size=128)
-    valid_loader = DataProgress.get_dataloader(valid_file, batch_size=valid_batch_size)
+    train_loader = DataProgress.get_dataloader(train_file, batch_size=128, shuffle=True)
+    valid_loader = DataProgress.get_dataloader(valid_file)
 
     min_valid_loss = evaluate(model, valid_loader, loss_fn, device)  # 初始验证 loss
 
@@ -127,9 +128,9 @@ if __name__ == "__main__":
     print(f"Using device: {device}")
 
     # 通用配置
-    data_dir = "E:/project/B3"
+    data_dir = "E:/project/B7/"
     weight_dir = os.path.join(data_dir, 'Trained Weights')
-    base_material = ("3C90")
+    base_material = "3C90"
     base_model_path = os.path.join(weight_dir, f"{base_material}.ckpt")
     epochs = 700
     valid_batch_size = 5000
@@ -150,7 +151,7 @@ if __name__ == "__main__":
     # === 第二步：遍历其余材料，基于 base model 微调训练 ===
     for material in all_materials:
         if material == base_material:
-            continue  # 已处理，无需再训练y
+            continue  # 已处理，无需再训练
 
         print(f"\n[{material}] Training based on base model: {base_material}")
         train_model(data_dir, material, base_model_path, device, epochs, valid_batch_size, verbose=False)
