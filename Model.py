@@ -16,11 +16,18 @@ class LSTMSeq2One(nn.Module):
 
         self.hidden_size = hidden_size
 
-        # LSTM: processes B waveform
-        self.lstm = nn.LSTM(input_size=input_size,
+        # CNN 层：输入通道=1（B），输出通道=128
+        self.cnn = nn.Sequential(
+            nn.Conv1d(in_channels=1, out_channels=128, kernel_size=25, padding=12),
+            nn.ReLU()
+        )
+
+        # LSTM 层：输入维度=128（CNN 输出），输出维度=hidden_size
+        self.lstm = nn.LSTM(input_size=128,
                             hidden_size=hidden_size,
                             num_layers=lstm_num_layers,
                             batch_first=True)
+
 
         # Fully connected regression head
         self.regression_head = nn.Sequential(
@@ -48,15 +55,6 @@ class LSTMSeq2One(nn.Module):
         self.std_temp = (1.0, 0.0)
 
     def forward(self, x):
-        """
-        x.shape == [B, T, 5]
-        - x[:,:,0]: B
-        - x[:,:,1]: freq (scalar, constant per sequence)
-        - x[:,:,2]: temp (scalar)
-        - x[:,:,3]: dB
-        - x[:,:,4]: d2B
-        - x[:,:,5]: h
-        """
 
         # 取出静态特征
         in_b = x[:, :, 0:1]  # B waveform
@@ -64,23 +62,29 @@ class LSTMSeq2One(nn.Module):
         in_temp = x[:, 0, 2]  # scalar: temperature
         in_bm = x[:, 0, 3]  # scalar: Bm
 
-        # --- Data Augmentation ---
-        batch_size, seq_len, _ = in_b.shape
+        # --- CNN 编码 ---
+        # 转为 (batch, 1, seq_len)
+        x_b = in_b.permute(0, 2, 1)
+        x_b = self.cnn(x_b)  # (batch, 128, seq_len)
+        x_b = x_b.permute(0, 2, 1)  # (batch, seq_len, 128)
 
-        # Random waveform shift
-        rand_shifts = torch.randint(seq_len, (batch_size, 1, 1), device=x.device)
-        in_b = torch.cat([
-            in_b[i].roll(shifts=int(rand_shifts[i]), dims=0).unsqueeze(0)
-            for i in range(batch_size)
-        ], dim=0)
+        # --- LSTM 编码 ---
+        out, _ = self.lstm(x_b)
+        last_hidden = out[:, -1, :]  # 取最后时刻输出
+
+        # # --- Data Augmentation ---
+        # batch_size, seq_len, _ = in_b.shape
+        #
+        # # Random waveform shift
+        # rand_shifts = torch.randint(seq_len, (batch_size, 1, 1), device=x.device)
+        # in_b = torch.cat([
+        #     in_b[i].roll(shifts=int(rand_shifts[i]), dims=0).unsqueeze(0)
+        #     for i in range(batch_size)
+        # ], dim=0)
 
         # # 上下翻转（对所有动态通道取负）
         # flip_mask = torch.rand(batch_size, 1, 1, device=x.device) > 0.5
         # dynamic = torch.where(flip_mask, -dynamic, dynamic)
-
-        # --- LSTM Encoding ---
-        out, _ = self.lstm(in_b)
-        last_hidden = out[:, -1, :]  # last timestep output
 
         # --- Concatenate scalar features ---
         out_combined = torch.cat([
@@ -105,8 +109,13 @@ class LSTMSeq2One(nn.Module):
         in_freq = x[:, 0, 2]
         in_temp = x[:, 0, 3]
 
+        # --- CNN 编码 ---
+        x_b = in_b.permute(0, 2, 1)
+        x_b = self.cnn(x_b)
+        x_b = x_b.permute(0, 2, 1)
+
         # --- LSTM 编码 ---
-        out, _ = self.lstm(in_b)
+        out, _ = self.lstm(x_b)
         last_hidden = out[:, -1, :]
 
         # --- 拼接静态特征 ---

@@ -6,7 +6,7 @@ import pandas as pd
 import DataProgress
 import Model
 
-data_dir = r'E:\project\B7'
+data_dir = r'E:\project\B6'
 
 weights_dir = os.path.join(data_dir, 'Trained Weights') # Directory containing weighted material models
 training_data_dir = os.path.join(data_dir, 'Processed Training Data') # Directory of pre-processed training data

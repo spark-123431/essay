@@ -58,6 +58,12 @@ class CNNLSTMNet(nn.Module):
         """
         batch_size, seq_len, _ = x.shape
 
+        # # ==== 数据增强：随机 roll 动态通道 ====
+        # if self.training:
+        #     rand_shifts = torch.randint(low=0, high=seq_len, size=(batch_size,), device=x.device)
+        #     for i in range(batch_size):
+        #         x[i, :, [0, 3, 4, 5]] = x[i, :, [0, 3, 4, 5]].roll(shifts=int(rand_shifts[i]), dims=0)
+
         # 静态通道 freq, temp
         in_freq = x[:, 0, 1]
         in_temp = x[:, 0, 2]

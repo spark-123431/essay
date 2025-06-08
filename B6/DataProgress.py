@@ -253,8 +253,8 @@ def get_dataloader(file_path, batch_size=64, shuffle=False):
 
 if __name__ == '__main__':
     # 设定路径
-    raw_data_path = r"E:\project\B7\materials"
-    processed_data_dir = r"E:\project\B7\Processed Training Data"
+    raw_data_path = r"E:\project\B6\materials"
+    processed_data_dir = r"E:\project\B6\Processed Training Data"
     newStep = 128
 
     for material in os.listdir(raw_data_path):

@@ -145,15 +145,10 @@ def magplot(material_name, relative_error, save_path="", xlim=50):
 
 # ===== Data Transform and Split =====
 def dataTransform(raw_data, newStep, savePath, plot=False):
-    b_buff = np.zeros([raw_data.b.shape[0], newStep])
-    h_buff = np.zeros([raw_data.b.shape[0], newStep])
-    for i in range(raw_data.b.shape[0]):
-        x = np.linspace(0, newStep, raw_data.b.shape[1], endpoint=True)
-        y = raw_data.b[i]
-        b = np.interp(np.arange(0, newStep), x, y)
-        h = np.interp(np.arange(0, newStep), x, y)
-        b_buff[i] = b
-        h_buff[i] = h
+    # 不进行插值，直接复制原始数据
+    b_buff = raw_data.b.copy()
+    h_buff = raw_data.h.copy()
+
     raw_data.b = b_buff
     raw_data.h = h_buff
 
