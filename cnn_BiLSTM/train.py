@@ -103,7 +103,7 @@ if __name__ == "__main__":
     base_material = ""  # 设置为 "" 表示不使用 base model
     base_model_path = os.path.join(weight_dir, f"{base_material}.ckpt") if base_material else None
 
-    epochs = 200
+    epochs = 700
     batch_size = 32
 
     materials_root = os.path.join(data_dir, "Processed Training Data")

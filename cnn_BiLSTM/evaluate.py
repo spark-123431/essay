@@ -26,7 +26,13 @@ def evaluate_model(model, dataloader, device):
             targets.append(y.cpu().numpy())
     pred_all = np.concatenate(preds)
     true_all = np.concatenate(targets)
-    return abs(pred_all - true_all) / (true_all + 1e-12)
+    # 从 log-space 还原
+    pred_real = np.exp(pred_all)
+    true_real = np.exp(true_all)
+
+    # 计算相对误差
+    rel_error = np.abs(pred_real - true_real) / (np.abs(true_real) + 1e-12)
+    return rel_error
 
 def magplot(material_name, relative_error, save_path="", xlim=50):
     relv_err = np.abs(relative_error) * 100
@@ -81,7 +87,7 @@ if __name__ == "__main__":
         if not os.path.exists(test_path):
             continue
         model = CNNBiLSTM().to(device)
-        model.load_state_dict(torch.load(model_path, map_location=device))
+        model.load_state_dict(torch.load(model_path, map_location=device, weights_only=True))
         test_set = load_test_dataset(test_path)
         test_loader = DataLoader(test_set, batch_size=4096)
         rel_err = evaluate_model(model, test_loader, device)

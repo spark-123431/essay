@@ -40,13 +40,6 @@ class CNNLSTMNet(nn.Module):
             nn.Linear(16, output_size)
         )
 
-        # 标准化参数（可覆盖）
-        self.std_b = (1.0, 0.0)
-        self.std_h = (1.0, 0.0)
-        self.std_freq = (1.0, 0.0)
-        self.std_loss = (1.0, 0.0)
-        self.std_temp = (1.0, 0.0)
-
     def forward(self, x):
         """
         x.shape == [B, T, 6]
@@ -58,12 +51,6 @@ class CNNLSTMNet(nn.Module):
         - x[:,:,5]: h
         """
         batch_size, seq_len, _ = x.shape
-
-        # # ==== 数据增强：随机 roll 动态通道 ====
-        # if self.training:
-        #     rand_shifts = torch.randint(low=0, high=seq_len, size=(batch_size,), device=x.device)
-        #     for i in range(batch_size):
-        #         x[i, :, [0, 3, 4, 5]] = x[i, :, [0, 3, 4, 5]].roll(shifts=int(rand_shifts[i]), dims=0)
 
         # 静态通道 freq, temp
         in_freq = x[:, 0, 1]
@@ -92,26 +79,6 @@ class CNNLSTMNet(nn.Module):
     def valid(self, x):
         # 验证逻辑与 forward 一致
         return self.forward(x)
-
-
-    def state_dict(self, *args, **kwargs):
-        state = super().state_dict(*args, **kwargs)
-        state.update({
-            'std_b': self.std_b,
-            'std_h': self.std_h,
-            'std_freq': self.std_freq,
-            'std_loss': self.std_loss,
-            'std_temp': self.std_temp
-        })
-        return state
-
-    def load_state_dict(self, state_dict, strict=True):
-        self.std_b = state_dict.pop('std_b', (1.0, 0.0))
-        self.std_h = state_dict.pop('std_h', (1.0, 0.0))
-        self.std_freq = state_dict.pop('std_freq', (1.0, 0.0))
-        self.std_loss = state_dict.pop('std_loss', (1.0, 0.0))
-        self.std_temp = state_dict.pop('std_temp', (1.0, 0.0))
-        super().load_state_dict(state_dict, strict)
 
 
 def get_global_model():
