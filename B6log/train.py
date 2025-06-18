@@ -62,13 +62,22 @@ def train_model(data_dir, material, base_model_path, device, epochs, verbose=Fal
 
     for epoch in range(epochs):
         model.train()
+        total_train_loss = 0.0
+        total_train_count = 0
+
         for inputs, targets in train_loader:
             inputs, targets = inputs.to(device), targets.to(device)
             outputs = model(inputs)
             loss = loss_fn(outputs, targets)
+
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
+
+            total_train_loss += loss.item() * inputs.size(0)
+            total_train_count += inputs.size(0)
+
+        avg_train_loss = total_train_loss / total_train_count  # 全局平均训练 loss
 
         # 完整验证集评估
         val_loss = evaluate(model, valid_loader, loss_fn, device)
@@ -82,7 +91,8 @@ def train_model(data_dir, material, base_model_path, device, epochs, verbose=Fal
         scheduler.step()
 
         if (epoch + 1) % 10 == 0 and verbose:
-            print(f"[{material}] Epoch {epoch+1}/{epochs}, Train Loss: {loss.item():.3e}, Val Loss: {val_loss:.3e}")
+            print(
+                f"[{material}] Epoch {epoch + 1}/{epochs}, Train Loss: {avg_train_loss:.3e}, Val Loss: {val_loss:.3e}")
 
     # 保存 loss 曲线
     fig, ax = plt.subplots()
@@ -113,7 +123,7 @@ if __name__ == "__main__":
     weight_dir = os.path.join(data_dir, 'Trained Weights')
     base_material = "3C90"
     base_model_path = os.path.join(weight_dir, f"{base_material}.ckpt")
-    epochs = 200
+    epochs = 700
     verbose = False
 
     # 所有材料路径
