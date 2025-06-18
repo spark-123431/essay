@@ -4,7 +4,6 @@ import time
 import matplotlib.pyplot as plt
 import scipy.io as sio
 import torch.optim as optim
-from nbconvert.utils.io import unicode_stdin_stream
 
 from Model import get_global_model, RelativeLoss
 import DataProgress
@@ -24,7 +23,7 @@ def evaluate(model, data_loader, loss_fn, device):
     return total_loss / total_count
 
 
-def train_model(data_dir, material, base_model_path, device, epochs, valid_batch_size, verbose=False):
+def train_model(data_dir, material, base_model_path, device, epochs, verbose=False):
     training_data_dir = os.path.join(data_dir, 'Processed Training Data')
     weight_dir = os.path.join(data_dir, 'Trained Weights')
     progress_dir = os.path.join(data_dir, 'Training Progress')
@@ -49,12 +48,13 @@ def train_model(data_dir, material, base_model_path, device, epochs, valid_batch
         model.load_state_dict(torch.load(base_model_path, map_location=device))
         print("Pre-trained model loaded.")
 
-    loss_fn = RelativeLoss()
+
+    loss_fn = torch.nn.MSELoss()
     optimizer = optim.AdamW(model.parameters(), lr=1e-4)
     scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=200, eta_min=0)
 
-    train_loader = DataProgress.get_dataloader(train_file, batch_size=128)
-    valid_loader = DataProgress.get_dataloader(valid_file, batch_size=valid_batch_size)
+    train_loader = DataProgress.get_dataloader(train_file, batch_size=128, shuffle=True)
+    valid_loader = DataProgress.get_dataloader(valid_file)
 
     min_valid_loss = evaluate(model, valid_loader, loss_fn, device)  # 初始验证 loss
 
@@ -78,10 +78,6 @@ def train_model(data_dir, material, base_model_path, device, epochs, valid_batch
             ckpt_path = os.path.join(weight_dir, f"{material}.ckpt")
             torch.save(model.state_dict(), ckpt_path)
             print(f"[{material}] Model saved. Val Loss: {val_loss:.3e}")
-
-        train_losses.append(loss.item())
-        valid_losses.append(val_loss)
-        epochs_list.append(epoch + 1)
 
         scheduler.step()
 
@@ -113,12 +109,11 @@ if __name__ == "__main__":
     print(f"Using device: {device}")
 
     # 通用配置
-    data_dir = "E:/project/B3copy"
+    data_dir = r"E:\project\B6log"
     weight_dir = os.path.join(data_dir, 'Trained Weights')
     base_material = "3C90"
     base_model_path = os.path.join(weight_dir, f"{base_material}.ckpt")
-    epochs = 700
-    valid_batch_size = 5000
+    epochs = 200
     verbose = False
 
     # 所有材料路径
@@ -129,14 +124,14 @@ if __name__ == "__main__":
     # === 第一步：训练 base_material（如果模型文件不存在）===
     if not os.path.exists(base_model_path):
         print(f"[{base_material}] Base model not found. Training from scratch...")
-        train_model(data_dir, base_material, None, device, epochs, valid_batch_size, verbose=True)
+        train_model(data_dir, base_material, None, device, epochs, verbose=True)
     else:
         print(f"[{base_material}] Base model already exists.")
 
     # === 第二步：遍历其余材料，基于 base model 微调训练 ===
     for material in all_materials:
         if material == base_material:
-            continue  # 已处理，无需再训练y
+            continue  # 已处理，无需再训练
 
         print(f"\n[{material}] Training based on base model: {base_material}")
-        train_model(data_dir, material, base_model_path, device, epochs, valid_batch_size, verbose=False)
+        train_model(data_dir, material, base_model_path, device, epochs, verbose=False)

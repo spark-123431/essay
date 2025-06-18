@@ -4,6 +4,7 @@ import time
 import matplotlib.pyplot as plt
 import scipy.io as sio
 import torch.optim as optim
+from nbconvert.utils.io import unicode_stdin_stream
 
 from Model import get_global_model, RelativeLoss
 import DataProgress
@@ -48,13 +49,12 @@ def train_model(data_dir, material, base_model_path, device, epochs, valid_batch
         model.load_state_dict(torch.load(base_model_path, map_location=device))
         print("Pre-trained model loaded.")
 
-
-    loss_fn = torch.nn.MSELoss()
+    loss_fn = RelativeLoss()
     optimizer = optim.AdamW(model.parameters(), lr=1e-4)
     scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=200, eta_min=0)
 
-    train_loader = DataProgress.get_dataloader(train_file, batch_size=128, shuffle=True)
-    valid_loader = DataProgress.get_dataloader(valid_file)
+    train_loader = DataProgress.get_dataloader(train_file, batch_size=128)
+    valid_loader = DataProgress.get_dataloader(valid_file, batch_size=valid_batch_size)
 
     min_valid_loss = evaluate(model, valid_loader, loss_fn, device)  # 初始验证 loss
 
@@ -113,11 +113,11 @@ if __name__ == "__main__":
     print(f"Using device: {device}")
 
     # 通用配置
-    data_dir = r"E:\project\B6copy"
+    data_dir = "E:/project/B3log"
     weight_dir = os.path.join(data_dir, 'Trained Weights')
     base_material = "3C90"
     base_model_path = os.path.join(weight_dir, f"{base_material}.ckpt")
-    epochs = 200
+    epochs = 700
     valid_batch_size = 5000
     verbose = False
 
@@ -136,7 +136,7 @@ if __name__ == "__main__":
     # === 第二步：遍历其余材料，基于 base model 微调训练 ===
     for material in all_materials:
         if material == base_material:
-            continue  # 已处理，无需再训练
+            continue  # 已处理，无需再训练y
 
         print(f"\n[{material}] Training based on base model: {base_material}")
         train_model(data_dir, material, base_model_path, device, epochs, valid_batch_size, verbose=False)

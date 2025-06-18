@@ -123,7 +123,7 @@ if __name__ == '__main__':
     import torch
     import os
 
-    data_dir = 'E:/project/B3'
+    data_dir = 'E:/project/B3log'
     material = '3C94'
     base_model_path = os.path.join(data_dir, 'Trained Weights', f'{material}.ckpt')
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')

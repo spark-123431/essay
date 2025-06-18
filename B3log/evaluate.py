@@ -6,7 +6,7 @@ import pandas as pd
 import DataProgress
 import Model
 
-data_dir = r'E:\project\B6copy'
+data_dir = r'E:\project\B3log'
 
 weights_dir = os.path.join(data_dir, 'Trained Weights') # Directory containing weighted material models
 training_data_dir = os.path.join(data_dir, 'Processed Training Data') # Directory of pre-processed training data
@@ -43,53 +43,35 @@ for material in weights:
 
     num_samples = min(magData.b.shape[0], max_samples)  # Limits number of samples from validation dataset being used
 
-    step_len = magData.b.shape[1]
-
-    # 一阶导
-    dB = np.gradient(magData.b[:num_samples], axis=1)
-    dB[:, 0] = dB[:, 1]  # 边界处理
-
-    # 二阶导
-    d2B = np.gradient(dB, axis=1)
-    d2B[:, 0] = d2B[:, 1]
-
-    # 构造 6 通道输入
-    x_data = np.zeros([num_samples, step_len, 6], dtype=np.float32)
+    x_data = np.zeros([num_samples, magData.b.shape[1], 3])
     x_data[:, :, 0] = magData.b[:num_samples]
     x_data[:, :, 1] = magData.freq[:num_samples]
     x_data[:, :, 2] = magData.temp[:num_samples]
-    x_data[:, :, 3] = dB
-    x_data[:, :, 4] = d2B
-    x_data[:, :, 5] = magData.h[:num_samples]
 
     y_data = magData.loss[:num_samples]
 
     # Now we can pass a batch of sequences through the model
     inputs = torch.tensor(x_data, dtype=torch.float32)
-    with torch.no_grad():
-        outputs = model.valid(inputs)
+    outputs = model(inputs)
     total_params = sum(p.numel() for p in model.parameters())
 
     print('Data size ', magData.b.shape[0])
     print('model parameters: ', total_params)
 
     # get model performance
-    pred = outputs.detach().numpy() # Get loss prediction
-    real = y_data # Actual losses
+    pred = outputs.detach().numpy()  # Get loss prediction
+    real = y_data  # Actual losses
 
     real = np.exp(real)
     pred = np.exp(pred)
     relv_error = np.abs(pred - real) / (np.abs(real) + 1e-8)
-
-    # 直接在 log(loss) 空间比较
-    #relv_error = np.abs(pred - real) / (np.abs(real) + 1e-8)  # 避免分母为 0
 
     mean_relv_error = np.mean(relv_error)
     errors = {
         'mean_error': mean_relv_error,
         '95_percentile_error': np.percentile(relv_error, 95),
         '99_percentile_error': np.percentile(relv_error, 99),
-        'max_error': relv_error.max()
+        'max_error': relv_error.max
     }
     error_summary.append(errors)
 
@@ -102,3 +84,4 @@ for material in weights:
 
 dataframe = pd.DataFrame(data) # Create error dataframe of dictionary lists
 dataframe.to_csv(os.path.join(validation_dir, 'model_errors.csv'), index=False)
+

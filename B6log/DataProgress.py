@@ -8,39 +8,39 @@ from torch.utils.data import Dataset
 from torch.utils.data import DataLoader
 
 # ===== Linear standardization class =====
-# class linear_std:
-#     #x_std = k * x + b
-#     def __init__(self, min_raw=None, max_raw=None, min_std=0.0, max_std=1.0):
-#         if min_raw is not None and max_raw is not None:
-#             if max_raw == min_raw:
-#                 raise ValueError("max_raw must be different from min_raw to avoid division by zero.")
-#             self.k = (max_std - min_std) / (max_raw - min_raw)
-#             self.b = min_std - self.k * min_raw
-#         else:
-#             # 默认值（若从文件加载则会覆盖）
-#             self.k = 1.0
-#             self.b = 0.0
-#
-#     def std(self, x):
-#         return self.k * x + self.b
-#
-#     def inverse(self, x_std):
-#         return (x_std - self.b) / self.k
-#
-#     def save(self, path):
-#         np.save(path, {"k": self.k, "b": self.b})
-#
-#     def load(self, path):
-#         d = np.load(path, allow_pickle=True).item()
-#         self.k = d['k']
-#         self.b = d['b']
-#
-#     def unstd(self, y):
-#         return (y - self.b) / self.k
-#
-#     @staticmethod
-#     def get_std_range(min_raw, max_raw, min_std=0.0, max_std=1.0):
-#         return linear_std(min_raw, max_raw, min_std, max_std)
+class linear_std:
+    #x_std = k * x + b
+    def __init__(self, min_raw=None, max_raw=None, min_std=0.0, max_std=1.0):
+        if min_raw is not None and max_raw is not None:
+            if max_raw == min_raw:
+                raise ValueError("max_raw must be different from min_raw to avoid division by zero.")
+            self.k = (max_std - min_std) / (max_raw - min_raw)
+            self.b = min_std - self.k * min_raw
+        else:
+            # 默认值（若从文件加载则会覆盖）
+            self.k = 1.0
+            self.b = 0.0
+
+    def std(self, x):
+        return self.k * x + self.b
+
+    def inverse(self, x_std):
+        return (x_std - self.b) / self.k
+
+    def save(self, path):
+        np.save(path, {"k": self.k, "b": self.b})
+
+    def load(self, path):
+        d = np.load(path, allow_pickle=True).item()
+        self.k = d['k']
+        self.b = d['b']
+
+    def unstd(self, y):
+        return (y - self.b) / self.k
+
+    @staticmethod
+    def get_std_range(min_raw, max_raw, min_std=0.0, max_std=1.0):
+        return linear_std(min_raw, max_raw, min_std, max_std)
 
 # ===== MagLoader and MagPlot =====
 class MagLoader:
@@ -133,16 +133,15 @@ def magplot(material_name, relative_error, save_path="", xlim=50):
 
 # ===== Data Transform and Split =====
 def dataTransform(raw_data, newStep, savePath, plot=False):
-    b_buff = np.zeros([raw_data.b.shape[0], newStep])
-    for i in range(raw_data.b.shape[0]):
-        x = np.linspace(0, newStep, raw_data.b.shape[1], endpoint=True)
-        y = raw_data.b[i]
-        b = np.interp(np.arange(0, newStep), x, y)
-        b_buff[i] = b
+    # 不做插值，直接复制原始数据
+    b_buff = raw_data.b.copy()
+    h_buff = raw_data.h.copy()
+
     raw_data.b = b_buff
+    raw_data.h = h_buff
 
     if plot:
-        plt.plot(np.linspace(0, newStep, raw_data.b.shape[1], endpoint=True), raw_data.b[0], 'x')
+        plt.plot(np.linspace(0, raw_data.b.shape[1], raw_data.b.shape[1], endpoint=True), raw_data.b[0], 'x')
         plt.show()
 
     # 对数处理 temp / freq / loss
@@ -150,24 +149,29 @@ def dataTransform(raw_data, newStep, savePath, plot=False):
     raw_data.temp = np.log(raw_data.temp + eps)
     raw_data.loss = np.log(raw_data.loss + eps)
     raw_data.freq = np.log(raw_data.freq + eps)
-    raw_data.h = np.array(0.0)
 
+    # 类型转换
     raw_data.freq = raw_data.freq.astype(np.float32)
     raw_data.b = raw_data.b.astype(np.float32)
     raw_data.temp = raw_data.temp.astype(np.float32)
     raw_data.loss = raw_data.loss.astype(np.float32)
     raw_data.h = raw_data.h.astype(np.float32)
 
+    # 保存数据（无标准化参数）
     raw_data.save2mat(savePath + r"\data_processed.mat")
+
     return raw_data
+
+
 
 def dataSplit(raw_data, savePath, indice=[0.7, 0.2, 0.1]):
     generator = torch.Generator().manual_seed(0)
-    allData = np.zeros([raw_data.b.shape[0], raw_data.b.shape[1]+3])
+    allData = np.zeros([raw_data.b.shape[0], raw_data.b.shape[1]*2+3])
     allData[:, 0:raw_data.b.shape[1]] = raw_data.b
-    allData[:, raw_data.b.shape[1]] = raw_data.temp[:, 0]
-    allData[:, raw_data.b.shape[1]+1] = raw_data.loss[:, 0]
-    allData[:, raw_data.b.shape[1]+2] = raw_data.freq[:, 0]
+    allData[:, raw_data.b.shape[1]:raw_data.b.shape[1]*2] = raw_data.h
+    allData[:, raw_data.b.shape[1]*2] = raw_data.temp[:, 0]
+    allData[:, raw_data.b.shape[1]*2+1] = raw_data.loss[:, 0]
+    allData[:, raw_data.b.shape[1]*2+2] = raw_data.freq[:, 0]
 
     train_set, valid_set, test_set = random_split(dataset=allData, lengths=indice, generator=generator)
     train_set = np.array(train_set, dtype=np.float32)
@@ -178,23 +182,36 @@ def dataSplit(raw_data, savePath, indice=[0.7, 0.2, 0.1]):
     for name, subset in zip(['train', 'valid', 'test'], [train_set, valid_set, test_set]):
         dataset = MagLoader()
         dataset.b = subset[:, 0:stepLen]
-        dataset.temp = subset[:, stepLen:stepLen + 1]
-        dataset.loss = subset[:, stepLen + 1:stepLen + 2]
-        dataset.freq = subset[:, stepLen + 2:stepLen + 3]
-        dataset.h = np.array(0.0)
+        dataset.h = subset[:, stepLen:stepLen*2]
+        dataset.temp = subset[:, stepLen*2:stepLen*2 + 1]
+        dataset.loss = subset[:, stepLen*2 + 1:stepLen*2 + 2]
+        dataset.freq = subset[:, stepLen*2 + 2:stepLen*2 + 3]
+        # dataset.h = np.array(0.0)
         dataset.save2mat(os.path.join(savePath, f"{name}.mat"))
 
 #将.mat 格式的磁损数据集封装成 PyTorch 可以训练使用的 Dataset 和 DataLoader 对象
 class MagDataset(Dataset):
     def __init__(self, file_path):
         mag_data = MagLoader(file_path)
-        self.x_data = np.zeros((mag_data.b.shape[0], mag_data.b.shape[1], 3))
+
+        num_samples = mag_data.b.shape[0]
+        seq_len = mag_data.b.shape[1]
+
+        # 计算 B 的一阶导数和二阶导数（中心差分）
+        dB = np.gradient(mag_data.b, axis=1)
+        d2B = np.gradient(dB, axis=1)
+
+        # 构造输入张量：B, freq, temp, dB, d2B, h → 共 6 通道
+        self.x_data = np.zeros((num_samples, seq_len, 6), dtype=np.float32)
         self.x_data[:, :, 0] = mag_data.b
-        self.x_data[:, :, 1] = mag_data.freq
-        self.x_data[:, :, 2] = mag_data.temp
-        self.y_data = mag_data.loss
+        self.x_data[:, :, 1] = mag_data.freq  # broadcast
+        self.x_data[:, :, 2] = mag_data.temp  # broadcast
+        self.x_data[:, :, 3] = dB
+        self.x_data[:, :, 4] = d2B
+        self.x_data[:, :, 5] = mag_data.h
+
+        self.y_data = torch.tensor(mag_data.loss, dtype=torch.float32)
         self.x_data = torch.tensor(self.x_data, dtype=torch.float32)
-        self.y_data = torch.tensor(self.y_data, dtype=torch.float32)
 
     def __len__(self):
         return len(self.x_data)
@@ -203,21 +220,23 @@ class MagDataset(Dataset):
         return self.x_data[idx], self.y_data[idx]
 
 
-def get_dataloader(file_path, batch_size=64, shuffle=True):
+
+def get_dataloader(file_path, batch_size=64, shuffle=False):
     dataset = MagDataset(file_path)
-    return DataLoader(dataset, batch_size=batch_size, shuffle=shuffle)
+    return DataLoader(dataset, batch_size=batch_size, shuffle=shuffle, drop_last=False)
+
 
 if __name__ == '__main__':
     # 设定路径
-    raw_data_path = r"E:\project\B3copy\materials"
-    processed_data_dir = r"E:\project\B3copy\Processed Training Data"
+    raw_data_path = r"E:\project\B6log\materials"
+    processed_data_dir = r"E:\project\B6log\Processed Training Data"
     newStep = 128
 
     for material in os.listdir(raw_data_path):
         raw_path = os.path.join(raw_data_path, material)
         save_path = os.path.join(processed_data_dir, material)
 
-        if not os.path.isdir(raw_path) or os.path.exists(os.path.join(save_path, 'train.mat')):
+        if not os.path.isdir(raw_path):# or os.path.exists(os.path.join(save_path, 'train.mat')):
             continue
 
         os.makedirs(save_path, exist_ok=True)
