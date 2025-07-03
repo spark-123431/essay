@@ -2,7 +2,7 @@ import numpy as np
 import torch
 import os
 import pandas as pd
-
+import matplotlib.pyplot as plt
 import DataProgress
 import Model
 
@@ -94,6 +94,23 @@ for material in weights:
 
     # Plot and save error histogram
     DataProgress.magplot(material, relv_error, os.path.join(validation_dir, f'{material}.pdf'))
+
+    # 只取前 50 个样本
+    n_plot = min(50, len(real))  # 防止样本不足
+    real_50 = real[:n_plot].flatten()
+    pred_50 = pred[:n_plot].flatten()
+
+    plt.figure(dpi=150, figsize=(6, 3))
+    plt.plot(real_50, label='Actual Loss', linewidth=1.5)
+    plt.plot(pred_50, label='Predicted Loss', linewidth=1.5, linestyle='--')
+    plt.title(f'Loss Prediction (First {n_plot} Samples) - {material}')
+    plt.xlabel('Sample Index')
+    plt.ylabel('Total Core Loss')
+    plt.legend()
+    plt.grid(True)
+    plt.tight_layout()
+    plt.savefig(os.path.join(validation_dir, f'{material}_loss_first_{n_plot}_samples.pdf'))
+    plt.close()
 
 dataframe = pd.DataFrame(data) # Create error dataframe of dictionary lists
 dataframe.to_csv(os.path.join(validation_dir, 'model_errors.csv'), index=False)
