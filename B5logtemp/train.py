@@ -17,7 +17,7 @@ def compute_input_channel_importance(model: torch.nn.Module, x: torch.Tensor) ->
     loss = output.sum()
     loss.backward()
 
-    grad = x.grad[:, :, [0, 3, 4, 5]]
+    grad = x.grad[:, :, [0, 2, 3, 4]]
     importance = torch.mean(torch.abs(grad), dim=[0, 1])
 
     if not was_training:
@@ -232,7 +232,7 @@ if __name__ == "__main__":
     print(f"Using device: {device}")
 
     # 通用配置
-    data_dir = r"D:\essay\B6log"
+    data_dir = r"D:\essay\B5logtemp"
     weight_dir = os.path.join(data_dir, 'Trained Weights')
     base_material = "3C90"
     base_model_path = os.path.join(weight_dir, f"{base_material}.ckpt")

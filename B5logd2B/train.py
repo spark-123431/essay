@@ -17,7 +17,7 @@ def compute_input_channel_importance(model: torch.nn.Module, x: torch.Tensor) ->
     loss = output.sum()
     loss.backward()
 
-    grad = x.grad[:, :, [0, 3, 4, 5]]
+    grad = x.grad[:, :, [0, 3, 4]]
     importance = torch.mean(torch.abs(grad), dim=[0, 1])
 
     if not was_training:
@@ -29,7 +29,7 @@ def compute_input_channel_importance(model: torch.nn.Module, x: torch.Tensor) ->
 import csv
 
 def log_importance_to_csv(csv_path: str, epoch: int, importance: torch.Tensor):
-    header = ["epoch", "B", "dB", "d2B", "h"]
+    header = ["epoch", "B", "dB", "h"]
     write_header = not os.path.exists(csv_path)
     row = [epoch] + importance.tolist()
 
@@ -214,7 +214,7 @@ def train_model(data_dir, material, base_model_path, device, epochs, verbose=Fal
         import pandas as pd
         df = pd.read_csv(importance_csv)
         fig, ax = plt.subplots()
-        for col in ["B", "dB", "d2B", "h"]:
+        for col in ["B", "dB", "h"]:
             ax.plot(df["epoch"], df[col], label=col)
 
         ax.set_xlabel("Epoch")
@@ -232,7 +232,7 @@ if __name__ == "__main__":
     print(f"Using device: {device}")
 
     # 通用配置
-    data_dir = r"D:\essay\B6log"
+    data_dir = r"D:\essay\B5logd2B"
     weight_dir = os.path.join(data_dir, 'Trained Weights')
     base_material = "3C90"
     base_model_path = os.path.join(weight_dir, f"{base_material}.ckpt")

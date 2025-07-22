@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 import DataProgress
 import Model
 
-data_dir = r'D:\essay\B6log'
+data_dir = r'D:\essay\B5log'
 
 weights_dir = os.path.join(data_dir, 'Trained Weights') # Directory containing weighted material models
 training_data_dir = os.path.join(data_dir, 'Processed Training Data') # Directory of pre-processed training data
@@ -60,7 +60,7 @@ for material in weights:
     x_data[:, :, 2] = magData.temp[:num_samples]
     x_data[:, :, 3] = dB
     x_data[:, :, 4] = d2B
-    x_data[:, :, 5] = magData.h[:num_samples]
+
 
     y_data = magData.loss[:num_samples]
 

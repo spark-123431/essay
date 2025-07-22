@@ -203,7 +203,6 @@ class MagDataset(Dataset):
 
         # 计算 B 的一阶导数和二阶导数（中心差分）
         dB = np.gradient(mag_data.b, axis=1)
-        d2B = np.gradient(dB, axis=1)
 
         # 构造输入张量：B, freq, temp, dB, d2B, h → 共 6 通道
         self.x_data = np.zeros((num_samples, seq_len, 6), dtype=np.float32)
@@ -211,8 +210,7 @@ class MagDataset(Dataset):
         self.x_data[:, :, 1] = mag_data.freq  # broadcast
         self.x_data[:, :, 2] = mag_data.temp  # broadcast
         self.x_data[:, :, 3] = dB
-        self.x_data[:, :, 4] = d2B
-        self.x_data[:, :, 5] = mag_data.h
+        self.x_data[:, :, 4] = mag_data.h
 
         self.y_data = torch.tensor(mag_data.loss, dtype=torch.float32)
         self.x_data = torch.tensor(self.x_data, dtype=torch.float32)
@@ -232,8 +230,8 @@ def get_dataloader(file_path, batch_size=64, shuffle=False):
 
 if __name__ == '__main__':
     # 设定路径
-    raw_data_path = r"D:\essay\B6log\materials"
-    processed_data_dir = r"D:\essay\B6log\Processed Training Data"
+    raw_data_path = r"D:\essay\B5logd2B\materials"
+    processed_data_dir = r"D:\essay\B5logd2B\Processed Training Data"
     newStep = 128
 
     for material in os.listdir(raw_data_path):

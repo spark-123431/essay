@@ -50,7 +50,6 @@ class MagLoader:
                 data = sio.loadmat(material_path)
                 self.b = np.array(data['b'])
                 self.h = np.array(data['h'])
-                self.temp = np.array(data['temp'])
                 self.loss = np.array(data['loss'])
                 self.freq = np.array(data['freq'])
             elif data_source == 'csv':
@@ -59,14 +58,12 @@ class MagLoader:
                     self.h = np.loadtxt(os.path.join(material_path, 'H_waveform[Am-1].csv'), delimiter=',').astype(np.float32)
                 except FileNotFoundError:
                     self.h = np.array([]).astype(np.float32)
-                self.temp = (np.loadtxt(os.path.join(material_path, 'Temperature[C].csv'), delimiter=',') + 273.15).astype(np.float32)
                 self.freq = np.loadtxt(os.path.join(material_path, 'Frequency[Hz].csv'), delimiter=',').astype(np.float32)
                 self.loss = np.loadtxt(os.path.join(material_path, 'Volumetric_losses[Wm-3].csv'), delimiter=',').astype(np.float32)
 
             if data_type == 'torch':
                 self.b = torch.from_numpy(self.b)
                 self.h = torch.from_numpy(self.h)
-                self.temp = torch.from_numpy(self.temp)
                 self.loss = torch.from_numpy(self.loss)
                 self.freq = torch.from_numpy(self.freq)
         else:
@@ -74,7 +71,7 @@ class MagLoader:
         return
 
     def save2mat(self, save_path):
-        sio.savemat(save_path, {'b': self.b, 'h': self.h, 'temp': self.temp, 'loss': self.loss, 'freq': self.freq})
+        sio.savemat(save_path, {'b': self.b, 'h': self.h, 'loss': self.loss, 'freq': self.freq})
 
 
 def magplot(material_name, relative_error, save_path="", xlim=50):
@@ -146,14 +143,12 @@ def dataTransform(raw_data, newStep, savePath, plot=False):
 
     # 对数处理 temp / freq / loss
     eps = 1e-8
-    raw_data.temp = np.log(raw_data.temp + eps)
     raw_data.loss = np.log(raw_data.loss + eps)
     raw_data.freq = np.log(raw_data.freq + eps)
 
     # 类型转换
     raw_data.freq = raw_data.freq.astype(np.float32)
     raw_data.b = raw_data.b.astype(np.float32)
-    raw_data.temp = raw_data.temp.astype(np.float32)
     raw_data.loss = raw_data.loss.astype(np.float32)
     raw_data.h = raw_data.h.astype(np.float32)
 
@@ -183,7 +178,6 @@ def dataSplit(raw_data, savePath, indice=[0.7, 0.2, 0.1]):
         dataset = MagLoader()
         dataset.b = raw_data.b[idx]
         dataset.h = raw_data.h[idx]
-        dataset.temp = raw_data.temp[idx]
         dataset.loss = raw_data.loss[idx]
         dataset.freq = raw_data.freq[idx]
         return dataset
@@ -206,13 +200,12 @@ class MagDataset(Dataset):
         d2B = np.gradient(dB, axis=1)
 
         # 构造输入张量：B, freq, temp, dB, d2B, h → 共 6 通道
-        self.x_data = np.zeros((num_samples, seq_len, 6), dtype=np.float32)
+        self.x_data = np.zeros((num_samples, seq_len, 5), dtype=np.float32)
         self.x_data[:, :, 0] = mag_data.b
         self.x_data[:, :, 1] = mag_data.freq  # broadcast
-        self.x_data[:, :, 2] = mag_data.temp  # broadcast
-        self.x_data[:, :, 3] = dB
-        self.x_data[:, :, 4] = d2B
-        self.x_data[:, :, 5] = mag_data.h
+        self.x_data[:, :, 2] = dB
+        self.x_data[:, :, 3] = d2B
+        self.x_data[:, :, 4] = mag_data.h
 
         self.y_data = torch.tensor(mag_data.loss, dtype=torch.float32)
         self.x_data = torch.tensor(self.x_data, dtype=torch.float32)
@@ -232,8 +225,8 @@ def get_dataloader(file_path, batch_size=64, shuffle=False):
 
 if __name__ == '__main__':
     # 设定路径
-    raw_data_path = r"D:\essay\B6log\materials"
-    processed_data_dir = r"D:\essay\B6log\Processed Training Data"
+    raw_data_path = r"D:\essay\B5logtemp\materials"
+    processed_data_dir = r"D:\essay\B5logtemp\Processed Training Data"
     newStep = 128
 
     for material in os.listdir(raw_data_path):
@@ -246,7 +239,6 @@ if __name__ == '__main__':
         os.makedirs(save_path, exist_ok=True)
 
         data = MagLoader(raw_path, data_source='csv')
-        data.temp = data.temp[:, np.newaxis] if data.temp.ndim == 1 else data.temp
         data.freq = data.freq[:, np.newaxis] if data.freq.ndim == 1 else data.freq
         data.loss = data.loss[:, np.newaxis] if data.loss.ndim == 1 else data.loss
 

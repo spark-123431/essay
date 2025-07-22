@@ -49,32 +49,26 @@ class MagLoader:
             if data_source == 'mat':
                 data = sio.loadmat(material_path)
                 self.b = np.array(data['b'])
-                self.h = np.array(data['h'])
                 self.temp = np.array(data['temp'])
                 self.loss = np.array(data['loss'])
                 self.freq = np.array(data['freq'])
             elif data_source == 'csv':
                 self.b = np.loadtxt(os.path.join(material_path, 'B_waveform[T].csv'), delimiter=',').astype(np.float32)
-                try:
-                    self.h = np.loadtxt(os.path.join(material_path, 'H_waveform[Am-1].csv'), delimiter=',').astype(np.float32)
-                except FileNotFoundError:
-                    self.h = np.array([]).astype(np.float32)
                 self.temp = (np.loadtxt(os.path.join(material_path, 'Temperature[C].csv'), delimiter=',') + 273.15).astype(np.float32)
                 self.freq = np.loadtxt(os.path.join(material_path, 'Frequency[Hz].csv'), delimiter=',').astype(np.float32)
                 self.loss = np.loadtxt(os.path.join(material_path, 'Volumetric_losses[Wm-3].csv'), delimiter=',').astype(np.float32)
 
             if data_type == 'torch':
                 self.b = torch.from_numpy(self.b)
-                self.h = torch.from_numpy(self.h)
                 self.temp = torch.from_numpy(self.temp)
                 self.loss = torch.from_numpy(self.loss)
                 self.freq = torch.from_numpy(self.freq)
         else:
-            self.b = self.h = self.temp = self.loss = self.freq = np.array([])
+            self.b = self.temp = self.loss = self.freq = np.array([])
         return
 
     def save2mat(self, save_path):
-        sio.savemat(save_path, {'b': self.b, 'h': self.h, 'temp': self.temp, 'loss': self.loss, 'freq': self.freq})
+        sio.savemat(save_path, {'b': self.b, 'temp': self.temp, 'loss': self.loss, 'freq': self.freq})
 
 
 def magplot(material_name, relative_error, save_path="", xlim=50):
@@ -135,10 +129,8 @@ def magplot(material_name, relative_error, save_path="", xlim=50):
 def dataTransform(raw_data, newStep, savePath, plot=False):
     # 不做插值，直接复制原始数据
     b_buff = raw_data.b.copy()
-    h_buff = raw_data.h.copy()
 
     raw_data.b = b_buff
-    raw_data.h = h_buff
 
     if plot:
         plt.plot(np.linspace(0, raw_data.b.shape[1], raw_data.b.shape[1], endpoint=True), raw_data.b[0], 'x')
@@ -155,7 +147,6 @@ def dataTransform(raw_data, newStep, savePath, plot=False):
     raw_data.b = raw_data.b.astype(np.float32)
     raw_data.temp = raw_data.temp.astype(np.float32)
     raw_data.loss = raw_data.loss.astype(np.float32)
-    raw_data.h = raw_data.h.astype(np.float32)
 
     # 保存数据（无标准化参数）
     raw_data.save2mat(savePath + r"\data_processed.mat")
@@ -182,7 +173,6 @@ def dataSplit(raw_data, savePath, indice=[0.7, 0.2, 0.1]):
         idx = indices.indices if isinstance(indices, torch.utils.data.Subset) else indices
         dataset = MagLoader()
         dataset.b = raw_data.b[idx]
-        dataset.h = raw_data.h[idx]
         dataset.temp = raw_data.temp[idx]
         dataset.loss = raw_data.loss[idx]
         dataset.freq = raw_data.freq[idx]
@@ -205,14 +195,13 @@ class MagDataset(Dataset):
         dB = np.gradient(mag_data.b, axis=1)
         d2B = np.gradient(dB, axis=1)
 
-        # 构造输入张量：B, freq, temp, dB, d2B, h → 共 6 通道
+        # 构造输入张量：B, freq, temp, dB, d2B → 共 5 通道
         self.x_data = np.zeros((num_samples, seq_len, 6), dtype=np.float32)
         self.x_data[:, :, 0] = mag_data.b
         self.x_data[:, :, 1] = mag_data.freq  # broadcast
         self.x_data[:, :, 2] = mag_data.temp  # broadcast
         self.x_data[:, :, 3] = dB
         self.x_data[:, :, 4] = d2B
-        self.x_data[:, :, 5] = mag_data.h
 
         self.y_data = torch.tensor(mag_data.loss, dtype=torch.float32)
         self.x_data = torch.tensor(self.x_data, dtype=torch.float32)
@@ -232,8 +221,8 @@ def get_dataloader(file_path, batch_size=64, shuffle=False):
 
 if __name__ == '__main__':
     # 设定路径
-    raw_data_path = r"D:\essay\B6log\materials"
-    processed_data_dir = r"D:\essay\B6log\Processed Training Data"
+    raw_data_path = r"D:\essay\B5log\materials"
+    processed_data_dir = r"D:\essay\B5log\Processed Training Data"
     newStep = 128
 
     for material in os.listdir(raw_data_path):

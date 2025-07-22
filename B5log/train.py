@@ -232,7 +232,7 @@ if __name__ == "__main__":
     print(f"Using device: {device}")
 
     # 通用配置
-    data_dir = r"D:\essay\B6log"
+    data_dir = r"D:\essay\B5log"
     weight_dir = os.path.join(data_dir, 'Trained Weights')
     base_material = "3C90"
     base_model_path = os.path.join(weight_dir, f"{base_material}.ckpt")
