@@ -103,7 +103,7 @@ def train_model(data_dir, material, base_model_path, device, epochs, valid_batch
         if (epoch + 1) % 10 == 0 and verbose:
             print(f"[{material}] Epoch {epoch+1}/{epochs}, Train Loss: {loss.item():.3e}, Val Loss: {val_loss:.3e}")
 
-    # 保存 loss 曲线
+    # ===== 保存整体 loss 曲线（PDF）=====
     fig, ax = plt.subplots()
     ax.plot(epochs_list, train_losses, label='Train Loss')
     ax.plot(epochs_list, valid_losses, label='Val Loss')
@@ -115,6 +115,23 @@ def train_model(data_dir, material, base_model_path, device, epochs, valid_batch
     fig_path = os.path.join(progress_dir, f"{material}.pdf")
     fig.savefig(fig_path)
     plt.close()
+
+    # ===== 新增：保存从第 30 轮开始的损失曲线（PNG）=====
+    start_epoch = 30
+    # 找到起始索引
+    start_idx = next((i for i, e in enumerate(epochs_list) if e >= start_epoch), 0)
+    if start_idx < len(epochs_list):  # 确保有足够 epoch
+        fig2, ax2 = plt.subplots()
+        ax2.plot(epochs_list[start_idx:], train_losses[start_idx:], label='Train Loss')
+        ax2.plot(epochs_list[start_idx:], valid_losses[start_idx:], label='Val Loss')
+        ax2.set_xlabel('Epoch')
+        ax2.set_ylabel('Loss')
+        ax2.set_title(f'Training Progress from Epoch {start_epoch}: {material}')
+        ax2.legend()
+        fig2.tight_layout()
+        png_path = os.path.join(progress_dir, f"{material}_from_epoch{start_epoch}.png")
+        fig2.savefig(png_path, dpi=300, bbox_inches='tight')
+        plt.close(fig2)
 
     # 保存 loss 数据
     loss_dict = {'train_losses': train_losses, 'validation_losses': valid_losses}
@@ -128,11 +145,11 @@ if __name__ == "__main__":
     print(f"Using device: {device}")
 
     # 通用配置
-    data_dir = r"E:\project\B6"
+    data_dir = r"D:\essay\B6"
     weight_dir = os.path.join(data_dir, 'Trained Weights')
     base_material = "3C90"
     base_model_path = os.path.join(weight_dir, f"{base_material}.ckpt")
-    epochs = 700
+    epochs = 600
     valid_batch_size = 5000
     verbose = False
 

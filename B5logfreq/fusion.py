@@ -11,7 +11,7 @@ import DataProgress
 
 # ========== 参数设置 ==========
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-data_dir = r"D:\essay\B6log"
+data_dir = r"D:\essay\B5logfreq"
 material = "3C90"
 material_path = os.path.join(data_dir, 'Processed Training Data', material)
 valid_file = os.path.join(material_path, "valid.mat")
@@ -20,11 +20,10 @@ model_path = os.path.join(data_dir, 'Trained Weights', f"{material}.ckpt")
 # 通道名称映射
 channel_map = {
     0: "B",
-    1: "freq",
-    2: "temp",
-    3: "dB",
-    4: "d2B",
-    5: "h"
+    1: "temp",
+    2: "dB",
+    3: "d2B",
+    4: "h"
 }
 
 # ========== 加载数据和模型 ==========
@@ -62,7 +61,7 @@ baseline_mse = torch.mean((baseline_preds_cat - targets_cat) ** 2).item()
 # ========== 通道消融分析 ==========
 ablation_results = {}
 
-for c in range(6):
+for c in range(5):
     # 通道置零
     inputs_ablate = inputs_all.clone()
     inputs_ablate[:, :, c] = 0.0

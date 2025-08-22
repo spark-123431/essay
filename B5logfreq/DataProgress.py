@@ -74,7 +74,7 @@ class MagLoader:
         sio.savemat(save_path, {'b': self.b, 'h': self.h, 'temp': self.temp, 'loss': self.loss})
 
 
-def magplot(material_name, relative_error, save_path="", xlim=50):
+def magplot(material_name, relative_error, save_path="", xlim=30):
     # 转换为百分比
     relv_err = np.abs(relative_error) * 100
 

@@ -18,8 +18,9 @@ class LSTMSeq2One(nn.Module):
 
         # CNN 层：输入通道=1（B），输出通道=128
         self.cnn = nn.Sequential(
-            nn.Conv1d(in_channels=1, out_channels=128, kernel_size=25, padding=12),
-            nn.ReLU()
+            nn.Conv1d(in_channels=4, out_channels=128, kernel_size=25, padding=12),
+            nn.ReLU(),
+            nn.MaxPool1d(kernel_size=2, stride=2)
         )
 
         # LSTM 层：输入维度=128（CNN 输出），输出维度=hidden_size
@@ -31,7 +32,7 @@ class LSTMSeq2One(nn.Module):
 
         # Fully connected regression head
         self.regression_head = nn.Sequential(
-            nn.Linear(hidden_size + 3, 128),
+            nn.Linear(hidden_size + 2, 128),
             nn.ELU(),
             nn.Linear(128, 196),
             nn.ELU(),
